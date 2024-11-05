@@ -22,6 +22,20 @@ This module contains the Polaris Service (server)
 
 # Main differences
 
+| Feature | Support in Quarkus | Support in Dropwizard | Impact |
+| --------| -------------------|-----------------------|-------------------|
+| CDI     | [built-in](https://quarkus.io/guides/cdi-reference) - index generated at build time | [supported with hk2](https://www.dropwizard.io/en/stable/manual/di.html) | Equal effort to migrate to annotations - possible complications with build-time dependency scanning |
+| Metrics | supported using Prometheus _simple client_ (must be enabled at build time) | manually updated to later prometheus API | Need to port updated Prometheus client to work in Quarkus |
+| health check | Health check framework supported - need to implement health checkers | Existing health checker - needs to integrate with persistence, etc. | Equal support |
+| `@Timed` annotation | Supported with built-in micrometer | `@TimedApi` implemented due to custom requirements | Need to port existing behavior |
+| json layout | basic json logging support | custom json layout implemented for support for key/value pairs | Need to port custom json layout behavior |
+| PolarisApplication | not needed | needed | can drop one extra class |
+| Cors | supported via config | supported with custom code | can drop extra cors code |
+| configuration | application.properties | application.yaml | significant effort to migrate - maps and lists supported? |
+| Performance | improved | baseline | better startup performance |
+| Custom json ser/de | ??? | currently implemented | unknown|
+
+
 * Bean injection (CDI) is made using `@ApplicationScoped` annotation on class and injected in other classes using `@Inject` annotation (https://quarkus.io/guides/cdi-reference). Dropwizard injection json 
 * Codehale metrics registry and opentelemetry boilerplate (prometheus exporter included) are not needed anymore: Quarkus provides it "out of the box" (https://quarkus.io/guides/opentelemetry)
 * `PolarisHealthCheck` is not needed anymore: Quarkus provides it "out of the box" (https://quarkus.io/guides/smallrye-health)

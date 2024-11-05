@@ -64,6 +64,8 @@ import org.apache.polaris.core.admin.model.AwsStorageConfigInfo;
 import org.apache.polaris.core.admin.model.StorageConfigInfo;
 import org.apache.polaris.core.auth.AuthenticatedPolarisPrincipal;
 import org.apache.polaris.core.auth.PolarisAuthorizerImpl;
+import org.apache.polaris.core.auth.PolarisAuthorizer;
+import org.apache.polaris.core.auth.PolarisSecretsManager.PrincipalSecretsResult;
 import org.apache.polaris.core.context.CallContext;
 import org.apache.polaris.core.context.RealmContext;
 import org.apache.polaris.core.entity.CatalogEntity;
@@ -289,8 +291,7 @@ public class BasePolarisCatalogTest extends CatalogTests<BasePolarisCatalog> {
       public void setMetricRegistry(PolarisMetricRegistry metricRegistry) {}
 
       @Override
-      public Map<String, PolarisMetaStoreManager.PrincipalSecretsResult> bootstrapRealms(
-          List<String> realms) {
+      public Map<String, PrincipalSecretsResult> bootstrapRealms(List<String> realms) {
         throw new NotImplementedException("Bootstrapping realms is not supported");
       }
 

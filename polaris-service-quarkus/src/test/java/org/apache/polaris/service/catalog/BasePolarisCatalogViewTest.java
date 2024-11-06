@@ -40,6 +40,7 @@ import org.apache.polaris.core.admin.model.FileStorageConfigInfo;
 import org.apache.polaris.core.admin.model.StorageConfigInfo;
 import org.apache.polaris.core.auth.AuthenticatedPolarisPrincipal;
 import org.apache.polaris.core.auth.PolarisAuthorizer;
+import org.apache.polaris.core.auth.PolarisAuthorizerImpl;
 import org.apache.polaris.core.context.CallContext;
 import org.apache.polaris.core.context.RealmContext;
 import org.apache.polaris.core.entity.CatalogEntity;
@@ -133,7 +134,7 @@ public class BasePolarisCatalogViewTest extends ViewCatalogTests<BasePolarisCata
             callContext,
             entityManager,
             authenticatedRoot,
-            new PolarisAuthorizer(new PolarisConfigurationStore() {}));
+            new PolarisAuthorizerImpl(new PolarisConfigurationStore() {}));
     adminService.createCatalog(
         new CatalogEntity.Builder()
             .setName(CATALOG_NAME)

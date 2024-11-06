@@ -53,6 +53,7 @@ import org.apache.polaris.core.admin.model.PrincipalWithCredentialsCredentials;
 import org.apache.polaris.core.admin.model.StorageConfigInfo;
 import org.apache.polaris.core.auth.AuthenticatedPolarisPrincipal;
 import org.apache.polaris.core.auth.PolarisAuthorizer;
+import org.apache.polaris.core.auth.PolarisAuthorizerImpl;
 import org.apache.polaris.core.context.CallContext;
 import org.apache.polaris.core.context.RealmContext;
 import org.apache.polaris.core.entity.CatalogEntity;
@@ -138,7 +139,7 @@ public abstract class PolarisAuthzTestBase {
           required(3, "id", Types.IntegerType.get(), "unique ID 🤪"),
           required(4, "data", Types.StringType.get()));
   protected final PolarisAuthorizer polarisAuthorizer =
-      new PolarisAuthorizer(
+      new PolarisAuthorizerImpl(
           new DefaultConfigurationStore(
               Map.of(
                   PolarisConfiguration.ENFORCE_PRINCIPAL_CREDENTIAL_ROTATION_REQUIRED_CHECKING.key,

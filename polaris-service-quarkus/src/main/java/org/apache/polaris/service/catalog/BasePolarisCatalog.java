@@ -87,6 +87,7 @@ import org.apache.polaris.core.entity.PolarisEntitySubType;
 import org.apache.polaris.core.entity.PolarisEntityType;
 import org.apache.polaris.core.entity.PolarisTaskConstants;
 import org.apache.polaris.core.entity.TableLikeEntity;
+import org.apache.polaris.core.persistence.BaseResult;
 import org.apache.polaris.core.persistence.PolarisEntityManager;
 import org.apache.polaris.core.persistence.PolarisMetaStoreManager;
 import org.apache.polaris.core.persistence.PolarisResolvedPathWrapper;
@@ -1689,7 +1690,7 @@ public class BasePolarisCatalog extends BaseMetastoreViewCatalog
           from,
           to);
       switch (returnedEntityResult.getReturnStatus()) {
-        case PolarisMetaStoreManager.ReturnStatus.ENTITY_ALREADY_EXISTS:
+        case BaseResult.ReturnStatus.ENTITY_ALREADY_EXISTS:
           {
             PolarisEntitySubType existingEntitySubType =
                 returnedEntityResult.getAlreadyExistsEntitySubType();
@@ -1708,16 +1709,16 @@ public class BasePolarisCatalog extends BaseMetastoreViewCatalog
                 String.format("Unexpected entity type '%s'", existingEntitySubType));
           }
 
-        case PolarisMetaStoreManager.ReturnStatus.ENTITY_NOT_FOUND:
+        case BaseResult.ReturnStatus.ENTITY_NOT_FOUND:
           throw new NotFoundException("Cannot rename %s to %s. %s does not exist", from, to, from);
 
           // this is temporary. Should throw a special error that will be caught and retried
-        case PolarisMetaStoreManager.ReturnStatus.TARGET_ENTITY_CONCURRENTLY_MODIFIED:
-        case PolarisMetaStoreManager.ReturnStatus.ENTITY_CANNOT_BE_RESOLVED:
+        case BaseResult.ReturnStatus.TARGET_ENTITY_CONCURRENTLY_MODIFIED:
+        case BaseResult.ReturnStatus.ENTITY_CANNOT_BE_RESOLVED:
           throw new RuntimeException("concurrent update detected, please retry");
 
           // some entities cannot be renamed
-        case PolarisMetaStoreManager.ReturnStatus.ENTITY_CANNOT_BE_RENAMED:
+        case BaseResult.ReturnStatus.ENTITY_CANNOT_BE_RENAMED:
           throw new BadRequestException("Cannot rename built-in object %s", leafEntity.getName());
 
           // some entities cannot be renamed
@@ -1829,7 +1830,7 @@ public class BasePolarisCatalog extends BaseMetastoreViewCatalog
     if (resolvedEntities == null) {
       // TODO: Error?
       return new PolarisMetaStoreManager.DropEntityResult(
-          PolarisMetaStoreManager.ReturnStatus.ENTITY_NOT_FOUND, null);
+          BaseResult.ReturnStatus.ENTITY_NOT_FOUND, null);
     }
 
     List<PolarisEntity> catalogPath = resolvedEntities.getRawParentPath();

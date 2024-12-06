@@ -123,6 +123,20 @@ public class EntityCacheGrantManager implements PolarisGrantManager {
 
   @Override
   public @NotNull LoadGrantsResult loadGrantsOnSecurable(
+      @NotNull PolarisCallContext callCtx, PolarisBaseEntity securable) {
+    EntityCacheEntry cachedEntity = entityCache.getEntityById(securable.getId());
+    if (cachedEntity != null
+        && (cachedEntity.getEntity().getEntityVersion() < securable.getEntityVersion()
+            || cachedEntity.getEntity().getGrantRecordsVersion()
+                < securable.getGrantRecordsVersion())) {
+      LOGGER.debug("Cache entry for securable {} is stale, refreshing", securable);
+      entityCache.removeCacheEntry(cachedEntity);
+    }
+    return loadGrantsOnSecurable(callCtx, securable.getCatalogId(), securable.getId());
+  }
+
+  @Override
+  public @NotNull LoadGrantsResult loadGrantsOnSecurable(
       @NotNull PolarisCallContext callCtx, long securableCatalogId, long securableId) {
     EntityCacheLookupResult lookupResult =
         entityCache.getOrLoadEntityById(callCtx, securableCatalogId, securableId);
@@ -184,6 +198,20 @@ public class EntityCacheGrantManager implements PolarisGrantManager {
         lookupResult.getCacheEntry().getEntity().getGrantRecordsVersion(),
         grantRecords,
         granteeList);
+  }
+
+  @Override
+  public @NotNull LoadGrantsResult loadGrantsToGrantee(
+      @NotNull PolarisCallContext callCtx, PolarisBaseEntity grantee) {
+    EntityCacheEntry cachedEntity = entityCache.getEntityById(grantee.getId());
+    if (cachedEntity != null
+        && (cachedEntity.getEntity().getEntityVersion() < grantee.getEntityVersion()
+            || cachedEntity.getEntity().getGrantRecordsVersion()
+                < grantee.getGrantRecordsVersion())) {
+      LOGGER.debug("Cache entry for grantee {} is stale, refreshing", grantee);
+      entityCache.removeCacheEntry(cachedEntity);
+    }
+    return loadGrantsToGrantee(callCtx, grantee.getCatalogId(), grantee.getId());
   }
 
   @Override

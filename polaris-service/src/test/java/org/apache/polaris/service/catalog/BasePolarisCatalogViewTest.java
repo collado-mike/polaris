@@ -27,7 +27,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.view.ViewCatalogTests;
@@ -44,9 +43,11 @@ import org.apache.polaris.core.context.CallContext;
 import org.apache.polaris.core.context.RealmContext;
 import org.apache.polaris.core.entity.CatalogEntity;
 import org.apache.polaris.core.entity.PolarisEntity;
+import org.apache.polaris.core.entity.PolarisEntityConstants;
 import org.apache.polaris.core.entity.PolarisEntitySubType;
 import org.apache.polaris.core.entity.PolarisEntityType;
 import org.apache.polaris.core.entity.PrincipalEntity;
+import org.apache.polaris.core.entity.PrincipalRoleEntity;
 import org.apache.polaris.core.persistence.PolarisEntityManager;
 import org.apache.polaris.core.persistence.PolarisMetaStoreManager;
 import org.apache.polaris.core.persistence.cache.EntityCache;
@@ -109,8 +110,18 @@ public class BasePolarisCatalogViewTest extends ViewCatalogTests<BasePolarisCata
                         PolarisEntitySubType.NULL_SUBTYPE,
                         "root")
                     .getEntity()));
+    PrincipalRoleEntity principalRole =
+        PrincipalRoleEntity.of(
+            metaStoreManager
+                .readEntityByName(
+                    polarisContext,
+                    null,
+                    PolarisEntityType.PRINCIPAL_ROLE,
+                    PolarisEntitySubType.NULL_SUBTYPE,
+                    PolarisEntityConstants.getNameOfPrincipalServiceAdminRole())
+                .getEntity());
     AuthenticatedPolarisPrincipal authenticatedRoot =
-        new AuthenticatedPolarisPrincipal(rootEntity, Set.of());
+        new AuthenticatedPolarisPrincipal(rootEntity, List.of(principalRole));
 
     PolarisAdminService adminService =
         new PolarisAdminService(

@@ -26,13 +26,18 @@ import jakarta.annotation.Nullable;
 import jakarta.inject.Inject;
 import jakarta.validation.constraints.NotNull;
 import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.apache.polaris.core.PolarisCallContext;
 import org.apache.polaris.core.context.RealmScoped;
 import org.apache.polaris.core.entity.PolarisBaseEntity;
+import org.apache.polaris.core.entity.PolarisChangeTrackingVersions;
 import org.apache.polaris.core.entity.PolarisEntityCore;
+import org.apache.polaris.core.entity.PolarisEntityId;
 import org.apache.polaris.core.entity.PolarisEntityType;
 import org.apache.polaris.core.entity.PolarisGrantRecord;
 import org.apache.polaris.core.persistence.cache.PolarisRemoteCache.CachedEntryResult;
@@ -479,5 +484,101 @@ public class EntityCache {
 
     // return what we found
     return new EntityCacheLookupResult(entry, cacheHit);
+  }
+
+  /**
+   * Bulk validate now the set of entities we didn't validate when we were accessing the entity
+   * cache
+   *
+   * @param toValidate entities to validate
+   * @return true if none of the entities in the cache has changed
+   */
+  public List<EntityCacheEntry> bulkValidate(
+      PolarisCallContext polarisCallContext, List<EntityCacheEntry> toValidate) {
+    // assume everything is good
+    boolean validationStatus = true;
+
+    List<EntityCacheEntry> validated = new ArrayList<>(toValidate.size());
+    // bulk validate
+    if (!toValidate.isEmpty()) {
+      List<PolarisEntityId> entityIds =
+          toValidate.stream()
+              .map(
+                  cacheEntry ->
+                      new PolarisEntityId(
+                          cacheEntry.getEntity().getCatalogId(), cacheEntry.getEntity().getId()))
+              .collect(Collectors.toList());
+
+      // now get the current backend versions of all these entities
+      PolarisRemoteCache.ChangeTrackingResult changeTrackingResult =
+          this.polarisRemoteCache.loadEntitiesChangeTracking(polarisCallContext, entityIds);
+
+      // refresh any entity which is not fresh. If an entity is missing, reload it
+      Iterator<EntityCacheEntry> entityIterator = toValidate.iterator();
+      Iterator<PolarisChangeTrackingVersions> versionIterator =
+          changeTrackingResult.getChangeTrackingVersions().iterator();
+
+      // determine the ones we need to reload or refresh and the ones which are up-to-date
+      while (entityIterator.hasNext()) {
+        // get cache entry and associated versions
+        EntityCacheEntry cacheEntry = entityIterator.next();
+        PolarisChangeTrackingVersions versions = versionIterator.next();
+
+        // entity we found in the cache
+        PolarisBaseEntity entity = cacheEntry.getEntity();
+
+        // refresh cache entry if the entity or grant records version is different
+        final EntityCacheEntry refreshedCacheEntry;
+        if (versions == null
+            || entity.getEntityVersion() != versions.getEntityVersion()
+            || entity.getGrantRecordsVersion() != versions.getGrantRecordsVersion()) {
+          // if null version we need to invalidate the cached entry since it has probably been
+          // dropped
+          if (versions == null) {
+            removeCacheEntry(cacheEntry);
+            refreshedCacheEntry = null;
+          } else {
+            // refresh that entity. If versions is null, it has been dropped
+            refreshedCacheEntry =
+                getAndRefreshIfNeeded(
+                    polarisCallContext,
+                    entity,
+                    versions.getEntityVersion(),
+                    versions.getGrantRecordsVersion());
+          }
+
+          // get the refreshed entity
+          PolarisBaseEntity refreshedEntity =
+              (refreshedCacheEntry == null) ? null : refreshedCacheEntry.getEntity();
+
+          // if the entity has been removed, or its name has changed, or it was re-parented, or it
+          // was dropped, we will have to perform another pass
+          if (refreshedEntity == null
+              || refreshedEntity.getParentId() != entity.getParentId()
+              || refreshedEntity.isDropped() != entity.isDropped()
+              || !refreshedEntity.getName().equals(entity.getName())) {
+            continue;
+          }
+
+          // special cases: the set of principal roles or catalog roles which have been
+          // activated might change if usage grants to a principal or a principal role have
+          // changed. Hence, force another pass if we are in that scenario
+          if (entity.getTypeCode() == PolarisEntityType.PRINCIPAL.getCode()
+              || entity.getTypeCode() == PolarisEntityType.PRINCIPAL_ROLE.getCode()) {
+            continue;
+          }
+        } else {
+          // no need to refresh, it is up-to-date
+          refreshedCacheEntry = cacheEntry;
+        }
+
+        // if it was found, it has been resolved, so if there is another pass, we will not have to
+        // resolve it again
+        validated.add(refreshedCacheEntry);
+      }
+    }
+
+    // done, return final validation status
+    return validated;
   }
 }

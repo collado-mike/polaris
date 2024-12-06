@@ -27,6 +27,7 @@ import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 import java.io.IOException;
 import java.time.Clock;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,7 @@ import org.apache.polaris.core.entity.CatalogEntity;
 import org.apache.polaris.core.entity.CatalogRoleEntity;
 import org.apache.polaris.core.entity.PolarisBaseEntity;
 import org.apache.polaris.core.entity.PolarisEntity;
+import org.apache.polaris.core.entity.PolarisEntityConstants;
 import org.apache.polaris.core.entity.PolarisEntitySubType;
 import org.apache.polaris.core.entity.PolarisEntityType;
 import org.apache.polaris.core.entity.PolarisPrivilege;
@@ -77,6 +79,7 @@ import org.apache.polaris.service.config.RealmEntityManagerFactory;
 import org.apache.polaris.service.context.PolarisCallContextCatalogFactory;
 import org.apache.polaris.service.persistence.InMemoryPolarisMetaStoreManagerFactory;
 import org.assertj.core.api.Assertions;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mockito;
@@ -204,7 +207,10 @@ public abstract class PolarisAuthzTestBase {
                         "root")
                     .getEntity()));
 
-    this.authenticatedRoot = new AuthenticatedPolarisPrincipal(rootEntity, Set.of());
+    this.authenticatedRoot =
+        new AuthenticatedPolarisPrincipal(
+            rootEntity,
+            loadPrincipalRoles(PolarisEntityConstants.getNameOfPrincipalServiceAdminRole()));
 
     this.adminService =
         new PolarisAdminService(
@@ -312,6 +318,30 @@ public abstract class PolarisAuthzTestBase {
         throw new RuntimeException(e);
       }
     }
+  }
+
+  protected @NotNull List<PrincipalRoleEntity> loadPrincipalRoles(
+      String... activatedPrincipalRoles) {
+    return loadPrincipalRoles(List.of(activatedPrincipalRoles));
+  }
+
+  protected @NotNull List<PrincipalRoleEntity> loadPrincipalRoles(
+      Collection<String> activatedPrincipalRoles) {
+    if (activatedPrincipalRoles == null || activatedPrincipalRoles.isEmpty()) {
+      return List.of(AuthenticatedPolarisPrincipal.POLARIS_ROLE_ALL);
+    }
+    return activatedPrincipalRoles.stream()
+        .map(
+            role ->
+                metaStoreManager.readEntityByName(
+                    callContext.getPolarisCallContext(),
+                    null,
+                    PolarisEntityType.PRINCIPAL_ROLE,
+                    PolarisEntitySubType.NULL_SUBTYPE,
+                    role))
+        .map(PolarisMetaStoreManager.EntityResult::getEntity)
+        .map(PrincipalRoleEntity::of)
+        .toList();
   }
 
   protected @Nonnull PrincipalEntity rotateAndRefreshPrincipal(

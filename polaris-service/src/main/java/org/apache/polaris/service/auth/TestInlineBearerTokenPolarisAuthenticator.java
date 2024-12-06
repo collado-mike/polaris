@@ -83,6 +83,10 @@ public class TestInlineBearerTokenPolarisAuthenticator extends BasePolarisAuthen
       tokenInfo.setIntegrationId(secrets.getPrincipalId());
     }
 
+    if (tokenInfo.getScope() == null) {
+      tokenInfo.setScope(PRINCIPAL_ROLE_ALL);
+    }
+
     return getPrincipal(tokenInfo);
   }
 

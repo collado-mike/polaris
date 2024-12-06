@@ -72,9 +72,11 @@ import org.apache.polaris.core.context.RealmContext;
 import org.apache.polaris.core.entity.CatalogEntity;
 import org.apache.polaris.core.entity.PolarisBaseEntity;
 import org.apache.polaris.core.entity.PolarisEntity;
+import org.apache.polaris.core.entity.PolarisEntityConstants;
 import org.apache.polaris.core.entity.PolarisEntitySubType;
 import org.apache.polaris.core.entity.PolarisEntityType;
 import org.apache.polaris.core.entity.PrincipalEntity;
+import org.apache.polaris.core.entity.PrincipalRoleEntity;
 import org.apache.polaris.core.entity.TaskEntity;
 import org.apache.polaris.core.persistence.MetaStoreManagerFactory;
 import org.apache.polaris.core.persistence.PolarisEntityManager;
@@ -177,7 +179,17 @@ public class BasePolarisCatalogTest extends CatalogTests<BasePolarisCatalog> {
                         "root")
                     .getEntity()));
 
-    authenticatedRoot = new AuthenticatedPolarisPrincipal(rootEntity, Set.of());
+    PrincipalRoleEntity principalRole =
+        PrincipalRoleEntity.of(
+            metaStoreManager
+                .readEntityByName(
+                    polarisContext,
+                    null,
+                    PolarisEntityType.PRINCIPAL_ROLE,
+                    PolarisEntitySubType.NULL_SUBTYPE,
+                    PolarisEntityConstants.getNameOfPrincipalServiceAdminRole())
+                .getEntity());
+    authenticatedRoot = new AuthenticatedPolarisPrincipal(rootEntity, List.of(principalRole));
 
     EntityCache entityCache = new EntityCache(metaStoreManager);
     adminService =

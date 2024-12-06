@@ -27,23 +27,21 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.polaris.core.PolarisCallContext;
 import org.apache.polaris.core.PolarisDiagnostics;
+import org.apache.polaris.core.auth.AuthenticatedPolarisPrincipal;
+import org.apache.polaris.core.auth.PolarisGrantManager;
 import org.apache.polaris.core.entity.PolarisBaseEntity;
-import org.apache.polaris.core.entity.PolarisChangeTrackingVersions;
 import org.apache.polaris.core.entity.PolarisEntityConstants;
-import org.apache.polaris.core.entity.PolarisEntityId;
 import org.apache.polaris.core.entity.PolarisEntityType;
 import org.apache.polaris.core.entity.PolarisGrantRecord;
 import org.apache.polaris.core.entity.PolarisPrivilege;
+import org.apache.polaris.core.entity.PrincipalRoleEntity;
 import org.apache.polaris.core.persistence.cache.EntityCache;
 import org.apache.polaris.core.persistence.cache.EntityCacheByNameKey;
 import org.apache.polaris.core.persistence.cache.EntityCacheEntry;
 import org.apache.polaris.core.persistence.cache.EntityCacheLookupResult;
-import org.apache.polaris.core.persistence.cache.PolarisRemoteCache;
-import org.apache.polaris.core.persistence.cache.PolarisRemoteCache.ChangeTrackingResult;
 
 /**
  * REST request resolver, allows to resolve all entities referenced directly or indirectly by in
@@ -58,23 +56,16 @@ public class Resolver {
   private final @Nonnull PolarisDiagnostics diagnostics;
 
   // the polaris metastore manager
-  private final @Nonnull PolarisRemoteCache polarisRemoteCache;
+  private final @Nonnull PolarisGrantManager polarisGrantManager;
 
   // the cache of entities
   private final @Nonnull EntityCache cache;
 
   // the id of the principal making the call or 0 if unknown
-  private final long callerPrincipalId;
-
-  // the name of the principal making the call or null if unknown. If 0, the principal name will be
-  // not null
-  private final String callerPrincipalName;
+  private final @Nonnull AuthenticatedPolarisPrincipal polarisPrincipal;
 
   // reference catalog name for name resolution
   private final String referenceCatalogName;
-
-  // if not null, subset of principal roles to activate
-  private final @Nullable Set<String> callerPrincipalRoleNamesScope;
 
   // set of entities to resolve given their name. This does not include namespaces or table_like
   // entities which are
@@ -111,11 +102,8 @@ public class Resolver {
    * Constructor, effectively starts an entity resolver session
    *
    * @param polarisCallContext the polaris call context
-   * @param polarisRemoteCache meta store manager
-   * @param callerPrincipalId if not 0, the id of the principal calling the service
-   * @param callerPrincipalName if callerPrincipalId is 0, the name of the principal calling the
-   *     service
-   * @param callerPrincipalRoleNamesScope if not null, scope principal roles
+   * @param polarisGrantManager the grant manager
+   * @param polarisPrincipal The {@link AuthenticatedPolarisPrincipal} for the current request
    * @param cache shared entity cache
    * @param referenceCatalogName if not null, specifies the name of the reference catalog. The
    *     reference catalog is the catalog used to resolve catalog roles and catalog path. Also, if a
@@ -127,28 +115,22 @@ public class Resolver {
    */
   public Resolver(
       @Nonnull PolarisCallContext polarisCallContext,
-      @Nonnull PolarisRemoteCache polarisRemoteCache,
-      long callerPrincipalId,
-      @Nullable String callerPrincipalName,
-      @Nullable Set<String> callerPrincipalRoleNamesScope,
+      @Nonnull PolarisGrantManager polarisGrantManager,
+      @Nonnull AuthenticatedPolarisPrincipal polarisPrincipal,
       @Nonnull EntityCache cache,
       @Nullable String referenceCatalogName) {
     this.polarisCallContext = polarisCallContext;
+    this.polarisGrantManager = polarisGrantManager;
     this.diagnostics = polarisCallContext.getDiagServices();
-    this.polarisRemoteCache = polarisRemoteCache;
     this.cache = cache;
-    this.callerPrincipalName = callerPrincipalName;
-    this.callerPrincipalId = callerPrincipalId;
+    this.polarisPrincipal = polarisPrincipal;
     this.referenceCatalogName = referenceCatalogName;
 
-    // scoped principal role names
-    this.callerPrincipalRoleNamesScope = callerPrincipalRoleNamesScope;
-
     // validate inputs
-    this.diagnostics.checkNotNull(polarisRemoteCache, "unexpected_null_polarisRemoteCache");
+    this.diagnostics.checkNotNull(polarisCallContext, "unexpected_null_polarisCallContext");
+    this.diagnostics.checkNotNull(polarisGrantManager, "unexpected_null_polarisGrantManager");
     this.diagnostics.checkNotNull(cache, "unexpected_null_cache");
-    this.diagnostics.check(
-        callerPrincipalId != 0 || callerPrincipalName != null, "principal_must_be_specified");
+    this.diagnostics.checkNotNull(polarisPrincipal, "principal_must_be_specified");
 
     // paths to resolve
     this.pathsToResolve = new ArrayList<>();
@@ -409,12 +391,7 @@ public class Resolver {
     List<EntityCacheEntry> toValidate = new ArrayList<>();
 
     // first resolve the principal and determine the set of activated principal roles
-    ResolverStatus status =
-        this.resolveCallerPrincipalAndPrincipalRoles(
-            toValidate,
-            this.callerPrincipalId,
-            this.callerPrincipalName,
-            this.callerPrincipalRoleNamesScope);
+    ResolverStatus status = this.resolveCallerPrincipalAndPrincipalRoles(toValidate);
 
     // if success, continue resolving
     if (status.getStatus() == ResolverStatus.StatusEnum.SUCCESS) {
@@ -441,7 +418,9 @@ public class Resolver {
     // don't validate if this entity has been changed in the backend. So validate now all these
     // entities in one single
     // go,
-    boolean validationSuccess = this.bulkValidate(toValidate);
+    List<EntityCacheEntry> validatedEntries = cache.bulkValidate(polarisCallContext, toValidate);
+    validatedEntries.forEach(this::addToResolved);
+    boolean validationSuccess = validatedEntries.size() == toValidate.size();
 
     if (validationSuccess) {
       this.updateResolved();
@@ -511,102 +490,6 @@ public class Resolver {
           refreshedEntry, "cache_entry_should_be_resolved", "entity={}", cacheEntry.getEntity());
     }
     return refreshedEntry;
-  }
-
-  /**
-   * Bulk validate now the set of entities we didn't validate when we were accessing the entity
-   * cache
-   *
-   * @param toValidate entities to validate
-   * @return true if none of the entities in the cache has changed
-   */
-  private boolean bulkValidate(List<EntityCacheEntry> toValidate) {
-    // assume everything is good
-    boolean validationStatus = true;
-
-    // bulk validate
-    if (!toValidate.isEmpty()) {
-      List<PolarisEntityId> entityIds =
-          toValidate.stream()
-              .map(
-                  cacheEntry ->
-                      new PolarisEntityId(
-                          cacheEntry.getEntity().getCatalogId(), cacheEntry.getEntity().getId()))
-              .collect(Collectors.toList());
-
-      // now get the current backend versions of all these entities
-      ChangeTrackingResult changeTrackingResult =
-          this.polarisRemoteCache.loadEntitiesChangeTracking(this.polarisCallContext, entityIds);
-
-      // refresh any entity which is not fresh. If an entity is missing, reload it
-      Iterator<EntityCacheEntry> entityIterator = toValidate.iterator();
-      Iterator<PolarisChangeTrackingVersions> versionIterator =
-          changeTrackingResult.getChangeTrackingVersions().iterator();
-
-      // determine the ones we need to reload or refresh and the ones which are up-to-date
-      while (entityIterator.hasNext()) {
-        // get cache entry and associated versions
-        EntityCacheEntry cacheEntry = entityIterator.next();
-        PolarisChangeTrackingVersions versions = versionIterator.next();
-
-        // entity we found in the cache
-        PolarisBaseEntity entity = cacheEntry.getEntity();
-
-        // refresh cache entry if the entity or grant records version is different
-        final EntityCacheEntry refreshedCacheEntry;
-        if (versions == null
-            || entity.getEntityVersion() != versions.getEntityVersion()
-            || entity.getGrantRecordsVersion() != versions.getGrantRecordsVersion()) {
-          // if null version we need to invalidate the cached entry since it has probably been
-          // dropped
-          if (versions == null) {
-            this.cache.removeCacheEntry(cacheEntry);
-            refreshedCacheEntry = null;
-          } else {
-            // refresh that entity. If versions is null, it has been dropped
-            refreshedCacheEntry =
-                this.cache.getAndRefreshIfNeeded(
-                    this.polarisCallContext,
-                    entity,
-                    versions.getEntityVersion(),
-                    versions.getGrantRecordsVersion());
-          }
-
-          // get the refreshed entity
-          PolarisBaseEntity refreshedEntity =
-              (refreshedCacheEntry == null) ? null : refreshedCacheEntry.getEntity();
-
-          // if the entity has been removed, or its name has changed, or it was re-parented, or it
-          // was dropped, we will have to perform another pass
-          if (refreshedEntity == null
-              || refreshedEntity.getParentId() != entity.getParentId()
-              || refreshedEntity.isDropped() != entity.isDropped()
-              || !refreshedEntity.getName().equals(entity.getName())) {
-            validationStatus = false;
-          }
-
-          // special cases: the set of principal roles or catalog roles which have been
-          // activated might change if usage grants to a principal or a principal role have
-          // changed. Hence, force another pass if we are in that scenario
-          if (entity.getTypeCode() == PolarisEntityType.PRINCIPAL.getCode()
-              || entity.getTypeCode() == PolarisEntityType.PRINCIPAL_ROLE.getCode()) {
-            validationStatus = false;
-          }
-        } else {
-          // no need to refresh, it is up-to-date
-          refreshedCacheEntry = cacheEntry;
-        }
-
-        // if it was found, it has been resolved, so if there is another pass, we will not have to
-        // resolve it again
-        if (refreshedCacheEntry != null) {
-          this.addToResolved(refreshedCacheEntry);
-        }
-      }
-    }
-
-    // done, return final validation status
-    return validationStatus;
   }
 
   /**
@@ -703,54 +586,53 @@ public class Resolver {
    *
    * @param toValidate all entities we have resolved from the cache, hence we will have to verify
    *     that these entities have not changed in the backend
-   * @param callerPrincipalId the id of the principal which made the call
-   * @param callerPrincipalRoleNamesScope if not null, subset of roles activated by this call
    * @return the status of resolution
    */
   private ResolverStatus resolveCallerPrincipalAndPrincipalRoles(
-      List<EntityCacheEntry> toValidate,
-      long callerPrincipalId,
-      String callerPrincipalName,
-      Set<String> callerPrincipalRoleNamesScope) {
+      List<EntityCacheEntry> toValidate) {
 
-    // resolve the principal, by name or id
-    this.resolvedCallerPrincipal =
-        (callerPrincipalId != PolarisEntityConstants.getNullId())
-            ? this.resolveById(
-                toValidate,
-                PolarisEntityType.PRINCIPAL,
-                PolarisEntityConstants.getNullId(),
-                callerPrincipalId)
-            : this.resolveByName(toValidate, PolarisEntityType.PRINCIPAL, callerPrincipalName);
+    // activate all principal roles specified in the authenticated principal
+    // we assume that the authentication step correctly authenticated the list of roles the
+    // principal
+    // has access to
+    List<Long> principalRolesIds =
+        this.polarisPrincipal.getActivatedPrincipalRoles().stream()
+            .map(PrincipalRoleEntity::getId)
+            .collect(Collectors.toList());
 
-    // if the principal was not found, we can end right there
-    if (this.resolvedCallerPrincipal == null
-        || this.resolvedCallerPrincipal.getEntity().isDropped()) {
-      return new ResolverStatus(ResolverStatus.StatusEnum.CALLER_PRINCIPAL_DOES_NOT_EXIST);
+    // If no PrincipalRoles were specified, resolve the principal and find all the principal roles
+    // for which
+    // there are grant records.
+    if (principalRolesIds.contains(AuthenticatedPolarisPrincipal.POLARIS_ROLE_ALL.getId())) {
+      EntityCacheEntry principalEntry =
+          resolveById(
+              toValidate,
+              PolarisEntityType.PRINCIPAL,
+              0L,
+              this.polarisPrincipal.getPrincipalEntity().getId());
+      // if the principal was not found, we can end right there
+      if (principalEntry == null || principalEntry.getEntity().isDropped()) {
+        return new ResolverStatus(ResolverStatus.StatusEnum.CALLER_PRINCIPAL_DOES_NOT_EXIST);
+      }
+      principalRolesIds =
+          principalEntry.getGrantRecordsAsGrantee().stream()
+              .filter(
+                  gr -> gr.getPrivilegeCode() == PolarisPrivilege.PRINCIPAL_ROLE_USAGE.getCode())
+              .map(PolarisGrantRecord::getSecurableId)
+              .collect(Collectors.toList());
     }
 
-    // activate all principal roles which still exist
-    for (PolarisGrantRecord grantRecord : this.resolvedCallerPrincipal.getGrantRecordsAsGrantee()) {
-      if (grantRecord.getPrivilegeCode() == PolarisPrivilege.PRINCIPAL_ROLE_USAGE.getCode()) {
-
-        // resolve principal role granted to that principal
-        EntityCacheEntry principalRole =
-            this.resolveById(
-                toValidate,
-                PolarisEntityType.PRINCIPAL_ROLE,
-                PolarisEntityConstants.getNullId(),
-                grantRecord.getSecurableId());
-
-        // skip if purged or has been dropped
-        if (principalRole != null && !principalRole.getEntity().isDropped()) {
-          // add it to the activated list if no scoped principal role or this principal role is
-          // activated
-          if (callerPrincipalRoleNamesScope == null
-              || callerPrincipalRoleNamesScope.contains(principalRole.getEntity().getName())) {
-            // this principal role is activated
-            this.resolvedCallerPrincipalRoles.add(principalRole);
-          }
-        }
+    // Load all the PrincipalRoles and their grant records so that we can fetch the catalog roles
+    // and load
+    // the privileges for the principal.
+    for (Long entityId : principalRolesIds) {
+      EntityCacheEntry principalRole =
+          this.resolveById(toValidate, PolarisEntityType.PRINCIPAL_ROLE, 0L, entityId);
+      // skip if purged or has been dropped
+      if (principalRole != null && !principalRole.getEntity().isDropped()) {
+        // add it to the activated list if no scoped principal role or this principal role is
+        // activated
+        this.resolvedCallerPrincipalRoles.add(principalRole);
       }
     }
 

@@ -57,6 +57,7 @@ import org.apache.polaris.core.entity.CatalogEntity;
 import org.apache.polaris.core.entity.CatalogRoleEntity;
 import org.apache.polaris.core.entity.PolarisPrivilege;
 import org.apache.polaris.core.entity.PrincipalEntity;
+import org.apache.polaris.core.entity.PrincipalRoleEntity;
 import org.apache.polaris.core.persistence.PolarisEntityManager;
 import org.apache.polaris.core.persistence.PolarisMetaStoreManager;
 import org.apache.polaris.core.persistence.resolver.PolarisResolutionManifest;
@@ -85,8 +86,9 @@ public class PolarisCatalogHandlerWrapperAuthzTest extends PolarisAuthzTestBase 
       Set<String> activatedPrincipalRoles,
       String catalogName,
       PolarisCallContextCatalogFactory factory) {
+    List<PrincipalRoleEntity> principalRoles = loadPrincipalRoles(activatedPrincipalRoles);
     final AuthenticatedPolarisPrincipal authenticatedPrincipal =
-        new AuthenticatedPolarisPrincipal(principalEntity, activatedPrincipalRoles);
+        new AuthenticatedPolarisPrincipal(principalEntity, principalRoles);
     return new PolarisCatalogHandlerWrapper(
         callContext,
         entityManager,
@@ -222,7 +224,8 @@ public class PolarisCatalogHandlerWrapperAuthzTest extends PolarisAuthzTestBase 
 
     final AuthenticatedPolarisPrincipal authenticatedPrincipal =
         new AuthenticatedPolarisPrincipal(
-            PrincipalEntity.of(newPrincipal.getPrincipal()), Set.of());
+            PrincipalEntity.of(newPrincipal.getPrincipal()),
+            loadPrincipalRoles(PRINCIPAL_ROLE1, PRINCIPAL_ROLE2));
     PolarisCatalogHandlerWrapper wrapper =
         new PolarisCatalogHandlerWrapper(
             callContext,
@@ -253,7 +256,9 @@ public class PolarisCatalogHandlerWrapperAuthzTest extends PolarisAuthzTestBase 
         rotateAndRefreshPrincipal(
             metaStoreManager, principalName, credentials, callContext.getPolarisCallContext());
     final AuthenticatedPolarisPrincipal authenticatedPrincipal1 =
-        new AuthenticatedPolarisPrincipal(PrincipalEntity.of(refreshPrincipal), Set.of());
+        new AuthenticatedPolarisPrincipal(
+            PrincipalEntity.of(refreshPrincipal),
+            loadPrincipalRoles(PRINCIPAL_ROLE1, PRINCIPAL_ROLE2));
     PolarisCatalogHandlerWrapper refreshedWrapper =
         new PolarisCatalogHandlerWrapper(
             callContext,

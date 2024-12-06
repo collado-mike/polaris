@@ -22,6 +22,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.polaris.core.auth.PolarisGrantManager;
 import org.apache.polaris.core.context.RealmContext;
 import org.apache.polaris.core.persistence.MetaStoreManagerFactory;
 import org.apache.polaris.core.persistence.PolarisEntityManager;
@@ -33,6 +34,7 @@ import org.slf4j.LoggerFactory;
 public class RealmEntityManagerFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(RealmEntityManagerFactory.class);
   private final MetaStoreManagerFactory metaStoreManagerFactory;
+  private final Provider<PolarisGrantManager> polarisGrantManagerProvider;
 
   // Key: realmIdentifier
   private final Map<String, PolarisEntityManager> cachedEntityManagers = new HashMap<>();
@@ -41,13 +43,17 @@ public class RealmEntityManagerFactory {
   // Subclasses for test injection.
   protected RealmEntityManagerFactory() {
     this.metaStoreManagerFactory = null;
+    this.polarisGrantManagerProvider = null;
     this.entityCache = null;
   }
 
   @Inject
   public RealmEntityManagerFactory(
-      MetaStoreManagerFactory metaStoreManagerFactory, Provider<EntityCache> entityCache) {
+      MetaStoreManagerFactory metaStoreManagerFactory,
+      Provider<PolarisGrantManager> polarisGrantManagerProvider,
+      Provider<EntityCache> entityCache) {
     this.metaStoreManagerFactory = metaStoreManagerFactory;
+    this.polarisGrantManagerProvider = polarisGrantManagerProvider;
     this.entityCache = entityCache;
   }
 
@@ -60,7 +66,7 @@ public class RealmEntityManagerFactory {
         r -> {
           LOGGER.info("Initializing new PolarisEntityManager for realm {}", r);
           return new PolarisEntityManager(
-              metaStoreManagerFactory.getOrCreateMetaStoreManager(context),
+              polarisGrantManagerProvider.get(),
               entityCache.get(),
               metaStoreManagerFactory.getOrCreateStorageCredentialCache(context));
         });

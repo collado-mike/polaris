@@ -20,23 +20,22 @@ package org.apache.polaris.core.auth;
 
 import jakarta.annotation.Nonnull;
 import java.util.List;
-import java.util.Set;
 import org.apache.polaris.core.entity.PolarisEntity;
 import org.apache.polaris.core.entity.PrincipalRoleEntity;
 
 /** Holds the results of request authentication. */
 public class AuthenticatedPolarisPrincipal implements java.security.Principal {
   private final PolarisEntity principalEntity;
-  private final Set<String> activatedPrincipalRoleNames;
-  // only known and set after the above set of principal role names have been resolved. Before
-  // this, this list is null
   private List<PrincipalRoleEntity> activatedPrincipalRoles;
 
+  public static final PrincipalRoleEntity POLARIS_ROLE_ALL =
+      new PrincipalRoleEntity.Builder().setId(Long.MAX_VALUE).setName("ALL").build();
+
   public AuthenticatedPolarisPrincipal(
-      @Nonnull PolarisEntity principalEntity, @Nonnull Set<String> activatedPrincipalRoles) {
+      @Nonnull PolarisEntity principalEntity,
+      @Nonnull List<PrincipalRoleEntity> activatedPrincipalRoles) {
     this.principalEntity = principalEntity;
-    this.activatedPrincipalRoleNames = activatedPrincipalRoles;
-    this.activatedPrincipalRoles = null;
+    this.activatedPrincipalRoles = activatedPrincipalRoles;
   }
 
   @Override
@@ -46,10 +45,6 @@ public class AuthenticatedPolarisPrincipal implements java.security.Principal {
 
   public PolarisEntity getPrincipalEntity() {
     return principalEntity;
-  }
-
-  public Set<String> getActivatedPrincipalRoleNames() {
-    return activatedPrincipalRoleNames;
   }
 
   public List<PrincipalRoleEntity> getActivatedPrincipalRoles() {
@@ -64,8 +59,6 @@ public class AuthenticatedPolarisPrincipal implements java.security.Principal {
   public String toString() {
     return "principalEntity="
         + getPrincipalEntity()
-        + ";activatedPrincipalRoleNames="
-        + getActivatedPrincipalRoleNames()
         + ";activatedPrincipalRoles="
         + getActivatedPrincipalRoles();
   }

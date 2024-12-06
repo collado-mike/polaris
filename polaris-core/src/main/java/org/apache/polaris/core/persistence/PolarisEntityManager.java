@@ -21,6 +21,7 @@ package org.apache.polaris.core.persistence;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 import org.apache.polaris.core.auth.AuthenticatedPolarisPrincipal;
+import org.apache.polaris.core.auth.PolarisGrantManager;
 import org.apache.polaris.core.context.CallContext;
 import org.apache.polaris.core.entity.PolarisEntity;
 import org.apache.polaris.core.entity.PolarisEntityType;
@@ -35,7 +36,7 @@ import org.apache.polaris.core.storage.cache.StorageCredentialCache;
  * id and name resolution mechanics around PolarisEntities.
  */
 public class PolarisEntityManager {
-  private final PolarisMetaStoreManager metaStoreManager;
+  private final PolarisGrantManager grantManager;
   private final EntityCache entityCache;
 
   private final StorageCredentialCache credentialCache;
@@ -54,15 +55,15 @@ public class PolarisEntityManager {
           .build();
 
   /**
-   * @param metaStoreManager the metastore manager for the current realm
+   * @param grantManager the grant manager for the current realm
    * @param entityCache the entity cache
    * @param credentialCache the storage credential cache for the current realm
    */
   public PolarisEntityManager(
-      PolarisMetaStoreManager metaStoreManager,
+      PolarisGrantManager grantManager,
       EntityCache entityCache,
       StorageCredentialCache credentialCache) {
-    this.metaStoreManager = metaStoreManager;
+    this.grantManager = grantManager;
     this.entityCache = entityCache;
     this.credentialCache = credentialCache;
   }
@@ -73,12 +74,8 @@ public class PolarisEntityManager {
       @Nullable String referenceCatalogName) {
     return new Resolver(
         callContext.getPolarisCallContext(),
-        metaStoreManager,
-        authenticatedPrincipal.getPrincipalEntity().getId(),
-        null, /* callerPrincipalName */
-        authenticatedPrincipal.getActivatedPrincipalRoleNames().isEmpty()
-            ? null
-            : authenticatedPrincipal.getActivatedPrincipalRoleNames(),
+        grantManager,
+        authenticatedPrincipal,
         entityCache,
         referenceCatalogName);
   }

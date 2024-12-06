@@ -530,7 +530,7 @@ public class PolarisAuthorizerImpl implements PolarisAuthorizer {
       throw new ForbiddenException(
           "Principal '%s' with activated PrincipalRoles '%s' and activated grants via '%s' is not authorized for op %s",
           authenticatedPrincipal.getName(),
-          authenticatedPrincipal.getActivatedPrincipalRoleNames(),
+          authenticatedPrincipal.getActivatedPrincipalRoles(),
           activatedEntities.stream().map(PolarisEntityCore::getName).collect(Collectors.toSet()),
           authzOp);
     }

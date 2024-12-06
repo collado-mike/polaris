@@ -22,7 +22,6 @@ import static org.apache.polaris.core.persistence.PrincipalSecretsGenerator.RAND
 
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -244,8 +243,7 @@ public class EntityCacheGrantManagerTest {
         new PolarisResolutionManifest(
             CallContext.of(realmContext, polarisCallContext),
             new PolarisEntityManager(metaStoreManager, entityCache, new StorageCredentialCache()),
-            new AuthenticatedPolarisPrincipal(
-                principal, Set.of(principalRole1.getName(), principalRole2.getName())),
+            new AuthenticatedPolarisPrincipal(principal, List.of(principalRole1, principalRole2)),
             catalog.getName());
     manifest.addPath(new ResolverPath(List.of(NS_1, NS_2), PolarisEntityType.NAMESPACE), ns2);
     manifest.addPath(
@@ -308,8 +306,7 @@ public class EntityCacheGrantManagerTest {
         new PolarisResolutionManifest(
             CallContext.of(realmContext, polarisCallContext),
             new PolarisEntityManager(metaStoreManager, entityCache, new StorageCredentialCache()),
-            new AuthenticatedPolarisPrincipal(
-                principal, Set.of(principalRole1.getName(), principalRole2.getName())),
+            new AuthenticatedPolarisPrincipal(principal, List.of(principalRole1, principalRole2)),
             catalog.getName());
     manifest.addPath(new ResolverPath(List.of(NS_1, NS_2), PolarisEntityType.NAMESPACE), ns2);
     manifest.addPath(
@@ -379,8 +376,7 @@ public class EntityCacheGrantManagerTest {
         new PolarisResolutionManifest(
             CallContext.of(realmContext, polarisCallContext),
             new PolarisEntityManager(metaStoreManager, entityCache, new StorageCredentialCache()),
-            new AuthenticatedPolarisPrincipal(
-                principal, Set.of(principalRole1.getName(), principalRole2.getName())),
+            new AuthenticatedPolarisPrincipal(principal, List.of(principalRole1, principalRole2)),
             catalog.getName());
     manifest.addPath(new ResolverPath(List.of(NS_1, NS_2), PolarisEntityType.NAMESPACE), ns2);
     manifest.addPath(
